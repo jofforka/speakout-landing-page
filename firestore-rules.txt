@@ -134,6 +134,46 @@ service cloud.firestore {
         (signedIn() && resource.data.userId == request.auth.uid);
     }
 
+    // External provider credentials stay private to the learner and admins.
+    // Learners can submit their own credentials but cannot approve or verify themselves.
+    match /externalCredentials/{credentialId} {
+      allow read: if isAdmin() ||
+        (signedIn() && resource.data.userId == request.auth.uid);
+
+      allow create: if isApprovedUser() &&
+        request.resource.data.userId == request.auth.uid &&
+        request.resource.data.status == "pending" &&
+        request.resource.data.attested == true;
+
+      allow update: if isAdmin() ||
+        (
+          isApprovedUser() &&
+          resource.data.userId == request.auth.uid &&
+          request.resource.data.userId == request.auth.uid &&
+          resource.data.status != "verified" &&
+          request.resource.data.status == "pending" &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            "title",
+            "issuer",
+            "credentialType",
+            "credentialNumber",
+            "issueDate",
+            "verificationUrl",
+            "evidenceUrl",
+            "notes",
+            "attested",
+            "updatedAt"
+          ])
+        );
+
+      allow delete: if isAdmin() ||
+        (
+          signedIn() &&
+          resource.data.userId == request.auth.uid &&
+          resource.data.status != "verified"
+        );
+    }
+
     // Full certificate records remain private to the recipient and admins.
     match /certificates/{certificateId} {
       allow read: if isAdmin() ||
