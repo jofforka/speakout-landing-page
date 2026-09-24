@@ -26,11 +26,12 @@
 <main class="content"><div class="slide-image"><h2 id="lessonTitle">Lesson</h2></div><div class="slide-body"><div id="courseNotice" class="notice" style="display:none"></div><div id="lessonContent" class="lesson-content"></div><div id="quizArea"></div><div class="btn-row"><button class="btn gold" id="previousButton" type="button">Previous</button><button class="btn green" id="completeButton" type="button">Mark Complete</button><button class="btn primary" id="nextButton" type="button">Next Lesson</button></div></div></main>
 </div></div>
 <script type="module">
-import { db } from "./firebase-config.js";
-import { doc,getDoc,collection,getDocs,query,where } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js";
+import { db, auth } from "./firebase-config.js";
+import { doc,getDoc,setDoc,collection,getDocs,query,where,serverTimestamp } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js";
+import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-auth.js";
 const params=new URLSearchParams(location.search);const courseId=params.get("id");const previewMode=params.get("preview")==="1";
 const loading=document.getElementById("loading"),playerArea=document.getElementById("playerArea"),courseTitle=document.getElementById("courseTitle"),courseSummary=document.getElementById("courseSummary"),moduleMenu=document.getElementById("moduleMenu"),lessonTitle=document.getElementById("lessonTitle"),lessonContent=document.getElementById("lessonContent"),quizArea=document.getElementById("quizArea"),progressBar=document.getElementById("progressBar"),progressText=document.getElementById("progressText"),previousButton=document.getElementById("previousButton"),nextButton=document.getElementById("nextButton"),completeButton=document.getElementById("completeButton"),detailsButton=document.getElementById("detailsButton"),courseNotice=document.getElementById("courseNotice");
-let course=null,modules=[],lessons=[],currentLessonIndex=0,completedLessons=new Set();
+let course=null,modules=[],lessons=[],currentLessonIndex=0,completedLessons=new Set(),currentUser=null,currentProfile=null;
 function escapeHtml(v){return String(v??"").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;").replaceAll("'","&#039;")}
 function isExternalCourse(c){return c?.courseType==="external"||c?.completionMethod==="certificate-upload"}
 function normaliseModules(raw){const result=[];(raw||[]).forEach((m,mi)=>{const arr=Array.isArray(m.lessons)?m.lessons:[];result.push({id:m.id||`${courseId}-module-${mi+1}`,title:m.title||`Module ${mi+1}`,description:m.description||"",quiz:m.quiz||null,finalAssessment:m.finalAssessment||null,lessons:arr.map((l,li)=>({id:l.id||`${courseId}-m${mi+1}-l${li+1}`,moduleIndex:mi,moduleTitle:m.title||`Module ${mi+1}`,title:l.title||`Lesson ${li+1}`,duration:l.duration||"",content:l.content||`<h2>${escapeHtml(l.title||`Lesson ${li+1}`)}</h2><p>Lesson content is being prepared.</p>`,videoUrl:l.videoUrl||"",worksheetUrl:l.worksheetUrl||""}))})});return result}
@@ -39,10 +40,71 @@ function flattenLessons(){lessons=[];modules.forEach(m=>m.lessons.forEach(l=>les
 function renderModuleMenu(){moduleMenu.innerHTML="";modules.forEach(m=>{const w=document.createElement("div");w.className="module-group";const h=document.createElement("div");h.className="module-title";h.textContent=m.title;w.appendChild(h);m.lessons.forEach(l=>{const gi=lessons.findIndex(x=>x.id===l.id);const item=document.createElement("div");item.className="lesson-item";if(completedLessons.has(l.id))item.classList.add("completed");if(gi===currentLessonIndex)item.classList.add("active");item.innerHTML=`${escapeHtml(l.title)}${l.duration?`<span class="lesson-meta">${escapeHtml(l.duration)}</span>`:""}`;item.addEventListener("click",()=>{currentLessonIndex=gi;renderCurrentLesson()});w.appendChild(item)});moduleMenu.appendChild(w)})}
 function renderCurrentLesson(){if(!lessons.length){lessonTitle.textContent="Course Content";lessonContent.innerHTML='<div class="notice warning">No lessons are currently available for this course.</div>';previousButton.disabled=nextButton.disabled=completeButton.disabled=true;return}const l=lessons[currentLessonIndex];lessonTitle.textContent=l.title;let html=l.content||"";if(l.videoUrl)html+=`<div style="margin-top:20px"><a class="btn primary" href="${escapeHtml(l.videoUrl)}" target="_blank" rel="noopener noreferrer">Watch Lesson Video</a></div>`;if(l.worksheetUrl)html+=`<div style="margin-top:12px"><a class="btn soft" href="${escapeHtml(l.worksheetUrl)}" target="_blank" rel="noopener noreferrer">Open Worksheet</a></div>`;lessonContent.innerHTML=html;quizArea.innerHTML="";const cm=modules[l.moduleIndex],last=cm.lessons[cm.lessons.length-1];if(last&&last.id===l.id&&cm.quiz){quizArea.innerHTML=`<div class="quiz-box"><h3>${escapeHtml(cm.quiz.title||`${cm.title} Quiz`)}</h3><p>${cm.quiz.questions||0} questions • Pass mark: ${cm.quiz.passMark||70}%</p><div class="notice">Quiz questions can be connected to your assessment collection or quiz engine in the next integration step.</div></div>`}if(last&&last.id===l.id&&cm.finalAssessment){quizArea.innerHTML+=`<div class="quiz-box"><h3>${escapeHtml(cm.finalAssessment.title||"Final Assessment")}</h3><p>${cm.finalAssessment.questions||0} questions • Pass mark: ${cm.finalAssessment.passMark||70}%</p></div>`}previousButton.disabled=currentLessonIndex===0;nextButton.disabled=currentLessonIndex===lessons.length-1;completeButton.textContent=completedLessons.has(l.id)?"Completed ✓":"Mark Complete";renderModuleMenu();updateProgress()}
 function updateProgress(){const total=lessons.length,completed=completedLessons.size,p=total?Math.round(completed/total*100):0;progressBar.style.width=`${p}%`;progressText.textContent=`${p}% Complete (${completed}/${total} lessons)`;if(p===100&&course?.certificateEligible){courseNotice.style.display="block";courseNotice.className="notice success";courseNotice.innerHTML=`<strong>Course Complete.</strong> You have completed all available lessons. ${(course.certificate?.available||course.certificateEligible)?"You may now be eligible for the course certificate, subject to any required quiz or final assessment.":""}`}}
-function saveProgress(){localStorage.setItem(`speakhub-progress-${courseId}`,JSON.stringify({completedLessons:Array.from(completedLessons),currentLessonIndex,updatedAt:new Date().toISOString()}))}
-function loadLocalProgress(){try{const d=JSON.parse(localStorage.getItem(`speakhub-progress-${courseId}`));if(d&&Array.isArray(d.completedLessons))completedLessons=new Set(d.completedLessons);if(Number.isInteger(d?.currentLessonIndex))currentLessonIndex=Math.min(d.currentLessonIndex,Math.max(lessons.length-1,0))}catch(e){console.warn("Could not load local progress",e)}}
-async function loadCourse(){try{if(!courseId){loading.textContent="No course ID was provided.";return}const snap=await getDoc(doc(db,"courses",courseId));if(!snap.exists()){loading.textContent="Course not found.";return}course={id:snap.id,...snap.data()};if(isExternalCourse(course)){loading.innerHTML=`<strong>External course detected.</strong><br><br>This course is delivered by ${escapeHtml(course.provider||"an external provider")}. External courses should be opened from the course details page rather than inside the SpeakHub course player.<br><br><a class="btn primary" href="course-details.html?id=${encodeURIComponent(courseId)}">Return to Course Details</a>`;return}courseTitle.textContent=course.title||"SpeakHub Course";courseSummary.textContent=course.shortDescription||course.description||"Interactive SpeakHub Academy learning experience.";detailsButton.href=`course-details.html?id=${encodeURIComponent(courseId)}`;if(previewMode){courseNotice.style.display="block";courseNotice.className="notice warning";courseNotice.innerHTML="<strong>Preview Mode.</strong> You are viewing this course in preview mode. Completion and certificate access may be limited."}modules=Array.isArray(course.modules)&&course.modules.length?normaliseModules(course.modules):await loadModulesFromFirestore();flattenLessons();loadLocalProgress();renderModuleMenu();renderCurrentLesson();loading.style.display="none";playerArea.style.display="grid"}catch(error){console.error("Course player error:",error);loading.textContent="Failed to load this course. Please try again."}}
-previousButton.addEventListener("click",()=>{if(currentLessonIndex>0){currentLessonIndex--;saveProgress();renderCurrentLesson();window.scrollTo({top:0,behavior:"smooth"})}});nextButton.addEventListener("click",()=>{if(currentLessonIndex<lessons.length-1){currentLessonIndex++;saveProgress();renderCurrentLesson();window.scrollTo({top:0,behavior:"smooth"})}});completeButton.addEventListener("click",()=>{if(!lessons.length)return;completedLessons.add(lessons[currentLessonIndex].id);saveProgress();renderCurrentLesson()});loadCourse();
+function localProgressKey(){return `speakhub-progress-${courseId}`}
+function loadLocalProgress(){
+  try{
+    const d=JSON.parse(localStorage.getItem(localProgressKey()));
+    if(d&&Array.isArray(d.completedLessons)) completedLessons=new Set(d.completedLessons);
+    if(Number.isInteger(d?.currentLessonIndex)) currentLessonIndex=Math.min(d.currentLessonIndex,Math.max(lessons.length-1,0));
+  }catch(e){console.warn("Could not load local progress",e)}
+}
+async function loadSavedProgress(){
+  loadLocalProgress();
+  if(!currentUser) return;
+  try{
+    const snap=await getDoc(doc(db,"userProgress",`${currentUser.uid}_${courseId}`));
+    if(!snap.exists()) return;
+    const d=snap.data();
+    if(Array.isArray(d.completedLessons)) completedLessons=new Set(d.completedLessons);
+    if(Number.isInteger(d.currentLessonIndex)) currentLessonIndex=Math.min(d.currentLessonIndex,Math.max(lessons.length-1,0));
+  }catch(e){console.warn("Could not load cloud progress",e)}
+}
+async function saveProgress(){
+  const payload={
+    userId:currentUser?.uid||"",
+    courseId,
+    completedLessons:Array.from(completedLessons),
+    currentLessonIndex,
+    completedCount:completedLessons.size,
+    totalLessons:lessons.length,
+    percent:lessons.length?Math.round(completedLessons.size/lessons.length*100):0,
+    progress:lessons.length?Math.round(completedLessons.size/lessons.length*100):0,
+    status:lessons.length&&completedLessons.size===lessons.length?"completed":"in-progress",
+    updatedAt:new Date().toISOString()
+  };
+  localStorage.setItem(localProgressKey(),JSON.stringify(payload));
+  if(!currentUser) return;
+  try{
+    await setDoc(doc(db,"userProgress",`${currentUser.uid}_${courseId}`),{
+      ...payload,
+      updatedAt:serverTimestamp()
+    },{merge:true});
+  }catch(e){console.warn("Could not save cloud progress",e)}
+}
+async function loadCourse(){try{if(!courseId){loading.textContent="No course ID was provided.";return}const snap=await getDoc(doc(db,"courses",courseId));if(!snap.exists()){loading.textContent="Course not found.";return}course={id:snap.id,...snap.data()};if(isExternalCourse(course)){loading.innerHTML=`<strong>External course detected.</strong><br><br>This course is delivered by ${escapeHtml(course.provider||"an external provider")}. External courses should be opened from the course details page rather than inside the SpeakHub course player.<br><br><a class="btn primary" href="course-details.html?id=${encodeURIComponent(courseId)}">Return to Course Details</a>`;return}courseTitle.textContent=course.title||"SpeakHub Course";courseSummary.textContent=course.shortDescription||course.description||"Interactive SpeakHub Academy learning experience.";detailsButton.href=`course-details.html?id=${encodeURIComponent(courseId)}`;if(previewMode){courseNotice.style.display="block";courseNotice.className="notice warning";courseNotice.innerHTML="<strong>Preview Mode.</strong> You are viewing this course in preview mode. Completion and certificate access may be limited."}modules=Array.isArray(course.modules)&&course.modules.length?normaliseModules(course.modules):await loadModulesFromFirestore();flattenLessons();await loadSavedProgress();renderModuleMenu();renderCurrentLesson();loading.style.display="none";playerArea.style.display="grid"}catch(error){console.error("Course player error:",error);loading.textContent="Failed to load this course. Please try again."}}
+previousButton.addEventListener("click",()=>{if(currentLessonIndex>0){currentLessonIndex--;saveProgress();renderCurrentLesson();window.scrollTo({top:0,behavior:"smooth"})}});
+nextButton.addEventListener("click",()=>{if(currentLessonIndex<lessons.length-1){currentLessonIndex++;saveProgress();renderCurrentLesson();window.scrollTo({top:0,behavior:"smooth"})}});
+completeButton.addEventListener("click",()=>{if(!lessons.length)return;completedLessons.add(lessons[currentLessonIndex].id);saveProgress();renderCurrentLesson()});
+
+onAuthStateChanged(auth,async user=>{
+  if(!user){
+    location.href=`auth.html?returnTo=${encodeURIComponent(location.pathname+location.search)}`;
+    return;
+  }
+  currentUser=user;
+  try{
+    const profileSnap=await getDoc(doc(db,"users",user.uid));
+    if(!profileSnap.exists()){location.href="auth.html#pending";return}
+    currentProfile={uid:user.uid,...profileSnap.data()};
+    const role=(currentProfile.role||"").toLowerCase();
+    const approved=currentProfile.status==="approved"||currentProfile.approved===true||role==="admin"||role==="super_admin";
+    if(!approved){location.href="auth.html#pending";return}
+    await loadCourse();
+  }catch(e){
+    console.error("Course access check failed",e);
+    loading.textContent="Could not verify course access. Please sign in again.";
+  }
+});
 </script>
 </body>
 </html>
