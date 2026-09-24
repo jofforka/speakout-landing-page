@@ -184,6 +184,7 @@ import {
   collection,
   doc,
   getDoc,
+  setDoc,
   updateDoc,
   serverTimestamp,
   onSnapshot
@@ -248,6 +249,23 @@ async function requireAdmin(callback){
 function isActiveStatus(status){
   const s = normalize(status || "active");
   return ["active","approved","valid"].includes(s);
+}
+
+async function syncPublicVerification(item){
+  if(!item?.id) return;
+  const publicRecord={
+    certificateNumber:item.certificateNumber||item.verificationCode||item.id,
+    verificationCode:item.verificationCode||"",
+    recipientName:item.recipientName||item.fullName||item.name||"Recipient",
+    title:item.title||item.courseTitle||item.programTitle||"Certificate",
+    issuer:item.issuer||item.issuedBy||"SpeakOut Mental Health Outreach",
+    issueDate:item.issueDate||item.issuedAtText||item.dateIssued||"",
+    status:item.status||"active",
+    type:item.type||item.certificateType||"",
+    courseId:item.courseId||"",
+    updatedAt:serverTimestamp()
+  };
+  await setDoc(doc(db,"certificateVerification",item.id),publicRecord,{merge:true});
 }
 
 function updateStats(){
@@ -364,6 +382,10 @@ async function updateCertificateStatus(id,status){
     reviewedAt:serverTimestamp()
   });
 
+  const item=ITEMS.find(x=>x.id===id);
+  if(item){
+    await syncPublicVerification({...item,status});
+  }
   show("Certificate status updated.","ok");
 }
 
@@ -375,6 +397,7 @@ function startRealtime(){
     snapshot => {
       ITEMS = [];
       snapshot.forEach(d => ITEMS.push({id:d.id,...d.data()}));
+      ITEMS.forEach(item=>syncPublicVerification(item).catch(err=>console.warn("Verification sync failed",item.id,err)));
       ITEMS.sort((a,b) => (b.createdAt?.seconds || b.issuedAt?.seconds || 0) - (a.createdAt?.seconds || a.issuedAt?.seconds || 0));
       updateStats();
       render();
