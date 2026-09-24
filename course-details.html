@@ -426,7 +426,7 @@ ul{line-height:1.7}
 </section>
 
 <script type="module">
-import { db } from "./firebase-config.js";
+import { db, auth } from "./firebase-config.js";
 
 import {
   doc,
@@ -436,6 +436,7 @@ import {
   query,
   where
 } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js";
+import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-auth.js";
 
 const id = new URLSearchParams(location.search).get("id");
 
@@ -967,7 +968,24 @@ async function loadCourse(){
   }
 }
 
-loadCourse();
+onAuthStateChanged(auth,async user=>{
+  if(!user){
+    location.href=`auth.html?returnTo=${encodeURIComponent(location.pathname+location.search)}`;
+    return;
+  }
+  try{
+    const profileSnap=await getDoc(doc(db,"users",user.uid));
+    if(!profileSnap.exists()){location.href="auth.html#pending";return}
+    const profile={uid:user.uid,...profileSnap.data()};
+    const role=(profile.role||"").toLowerCase();
+    const approved=profile.status==="approved"||profile.approved===true||role==="admin"||role==="super_admin";
+    if(!approved){location.href="auth.html#pending";return}
+    await loadCourse();
+  }catch(error){
+    console.error("Course access check failed",error);
+    document.getElementById("loading").textContent="Could not verify course access. Please sign in again.";
+  }
+});
 </script>
 
 </body>
