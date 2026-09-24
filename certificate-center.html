@@ -235,13 +235,13 @@ async function verifyCertificate(){
   try{
     let found = null;
 
-    const byVerification = await getDocs(query(collection(db,"certificates"),where("verificationCode","==",code)));
+    const byVerification = await getDocs(query(collection(db,"certificateVerification"),where("verificationCode","==",code)));
     if(!byVerification.empty){
       found = {id:byVerification.docs[0].id,...byVerification.docs[0].data()};
     }
 
     if(!found){
-      const byNumber = await getDocs(query(collection(db,"certificates"),where("certificateNumber","==",code)));
+      const byNumber = await getDocs(query(collection(db,"certificateVerification"),where("certificateNumber","==",code)));
       if(!byNumber.empty){
         found = {id:byNumber.docs[0].id,...byNumber.docs[0].data()};
       }

@@ -61,6 +61,7 @@ export function renderRoleNav(profile, active = ""){
       ["Library","student-library.html"],
       ["Kiddies","kiddies.html"],
       ["Certificates","certificate-center.html"],
+      ["Credentials","credential-passport.html"],
       ["Payments","payment-history.html"]
     ],
     parent: [
@@ -69,6 +70,7 @@ export function renderRoleNav(profile, active = ""){
       ["Parent Library","parent-library.html"],
       ["Workshops","workshops.html"],
       ["Certificates","certificate-center.html"],
+      ["Credentials","credential-passport.html"],
       ["Payments","payment-history.html"]
     ],
     teacher: [
@@ -76,7 +78,8 @@ export function renderRoleNav(profile, active = ""){
       ["Teacher Library","teacher-library.html"],
       ["Students","teacher-students.html"],
       ["Workshops","workshops.html"],
-      ["Certificates","certificate-center.html"]
+      ["Certificates","certificate-center.html"],
+      ["Credentials","credential-passport.html"]
     ],
     school_admin: [
       ["Dashboard","school-dashboard.html"],
@@ -91,6 +94,7 @@ export function renderRoleNav(profile, active = ""){
       ["Schools","admin-schools.html"],
       ["Users","admin-users.html"],
       ["Content","admin-content-review.html"],
+      ["Credentials","admin-credentials.html"],
       ["Payments","admin-payments.html"]
     ],
     super_admin: [
@@ -98,6 +102,7 @@ export function renderRoleNav(profile, active = ""){
       ["Schools","admin-schools.html"],
       ["Users","admin-users.html"],
       ["Content","admin-content-review.html"],
+      ["Credentials","admin-credentials.html"],
       ["Payments","admin-payments.html"]
     ]
   };
