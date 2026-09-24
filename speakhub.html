@@ -332,6 +332,8 @@ const emptyState = document.getElementById("emptyState");
 
 function safe(value){return value || "—";}
 function pretty(value){return (value || "—").toString().replaceAll("-", " ");}
+function prettyAudience(value){return Array.isArray(value)?value.map(pretty).join(", "):pretty(value||"all");}
+function isExternalCourse(item){return item?.courseType==="external"||item?.completionMethod==="certificate-upload";}
 function escapeAttr(value){return String(value || "").replaceAll('"',"&quot;").replaceAll("'","&#039;");}
 function normalize(value){return (value || "").toString().toLowerCase().trim();}
 function stat(id,value){const el=document.getElementById(id); if(el) el.textContent=Number(value||0).toLocaleString();}
@@ -346,14 +348,17 @@ function accessClass(item){
   return a === "free" ? "green" : "gold";
 }
 function canSeeCourse(item){
-  const aud = normalize(item.audience || "all");
   const role = normalize(currentProfile?.role || "");
-  if(!aud || aud === "all" || aud === "general") return true;
-  if(aud === "students" && role === "student") return true;
-  if(aud === "parents" && role === "parent") return true;
-  if(aud === "teachers" && role === "teacher") return true;
-  if(aud === "school" && role === "school_admin") return true;
-  return aud === role;
+  const raw = item.audience ?? "all";
+  const audiences = (Array.isArray(raw)?raw:[raw]).map(normalize);
+  if(!audiences.length || audiences.includes("all") || audiences.includes("general")) return true;
+  const aliases = {
+    student:["student","students","secondary","university","youth","teen","teens"],
+    parent:["parent","parents","adults","adult"],
+    teacher:["teacher","teachers","educator","educators"],
+    school_admin:["school","schools","school_admin"]
+  };
+  return (aliases[role]||[role]).some(a=>audiences.includes(a));
 }
 function isActiveCourse(item){
   return (item.status || "active") === "active" || item.active === true || item.approved === true;
@@ -383,7 +388,8 @@ function courseCard(item, featured=false){
 
       <div class="pills">
         <span class="pill">${pretty(item.category)}</span>
-        <span class="pill">${pretty(item.level || "beginner")}</span>
+        <span class="pill">${pretty(item.level || item.difficulty || "beginner")}</span>
+        ${isExternalCourse(item) ? `<span class="pill">External Provider</span>` : `<span class="pill">SpeakHub</span>`}
         <span class="pill ${accessClass(item)}">${money(item)}</span>
         ${item.certificateEligible ? `<span class="pill gold">Certificate</span>` : ""}
         ${featured || item.featured ? `<span class="pill green">Featured</span>` : ""}
@@ -392,8 +398,8 @@ function courseCard(item, featured=false){
       <h3>${safe(item.title || "Untitled Course")}</h3>
 
       <div class="course-meta">
-        <span>Instructor: ${safe(item.instructor || item.authorName || "SpeakOut")}</span>
-        <span>Audience: ${pretty(item.audience || "all")}</span>
+        <span>Provider: ${safe(item.provider || item.instructor || item.authorName || "SpeakHub Academy")}</span>
+        <span>Audience: ${prettyAudience(item.audience || "all")}</span>
         <span>${safe(item.duration || item.estimatedDuration || "Self-paced")}</span>
       </div>
 
@@ -405,7 +411,7 @@ function courseCard(item, featured=false){
       </div>
 
       <div class="card-actions">
-        <a class="btn primary" href="course-player.html?id=${id}">Start Course</a>
+        <a class="btn primary" href="${isExternalCourse(item)?`course-details.html?id=${id}`:`course-player.html?id=${id}`}">${isExternalCourse(item)?"View Pathway":"Start Course"}</a>
         <button class="btn softBtn" type="button" onclick="openCoursePreview('${escapeAttr(item.id)}')">Preview</button>
         <a class="btn ghost" href="course-details.html?id=${id}">Details</a>
         ${premiumPreview}
@@ -474,7 +480,7 @@ async function loadProgress(user){
 }
 async function loadCourses(){
   try{
-    const snap = await getDocs(collection(db,"courses"));
+    const snap = await getDocs(query(collection(db,"courses"),where("status","==","active")));
     courses = [];
     snap.forEach(d => {
       const item = { id:d.id, ...d.data() };
@@ -537,8 +543,10 @@ window.openCoursePreview = function(id){
     <h3>Course Information</h3>
     <p><strong>Instructor:</strong> ${safe(item.instructor || item.authorName || "SpeakOut")}</p>
     <p><strong>Category:</strong> ${pretty(item.category)}</p>
-    <p><strong>Audience:</strong> ${pretty(item.audience || "all")}</p>
-    <p><strong>Level:</strong> ${pretty(item.level || "beginner")}</p>
+    <p><strong>Provider:</strong> ${safe(item.provider || item.instructor || "SpeakHub Academy")}</p>
+    <p><strong>Course type:</strong> ${isExternalCourse(item) ? "External provider course" : "SpeakHub course"}</p>
+    <p><strong>Audience:</strong> ${prettyAudience(item.audience || "all")}</p>
+    <p><strong>Level:</strong> ${pretty(item.level || item.difficulty || "beginner")}</p>
     <p><strong>Access:</strong> ${money(item)}</p>
     <p><strong>Certificate:</strong> ${item.certificateEligible ? "Eligible" : "Not enabled yet"}</p>
     <p><strong>Duration:</strong> ${safe(item.duration || item.estimatedDuration || "Self-paced")}</p>
@@ -567,6 +575,29 @@ document.addEventListener("keydown", e => {
 onAuthStateChanged(auth, async user => {
   currentProfile = await loadProfile(user);
   renderNav(currentProfile);
+
+  if(!user){
+    loading.style.display = "block";
+    loading.textContent = "Create an account or sign in to unlock the SpeakHub course catalogue.";
+    featuredGrid.innerHTML = '<div class="notice">Featured learning pathways are available after login.</div>';
+    grid.innerHTML = '<div class="notice">SpeakHub courses are protected for registered learners. Sign in to browse, start courses and track progress.</div>';
+    emptyState.style.display = "none";
+    updateStats([]);
+    return;
+  }
+
+  const status = normalize(currentProfile?.status || "");
+  const role = normalize(currentProfile?.role || "");
+  if(status !== "approved" && role !== "admin" && role !== "super_admin"){
+    loading.style.display = "block";
+    loading.textContent = "Your account is awaiting approval. Course access will unlock after approval.";
+    featuredGrid.innerHTML = '<div class="notice">Learning access is pending account approval.</div>';
+    grid.innerHTML = '<div class="notice">Your course catalogue will appear here once your account is approved.</div>';
+    emptyState.style.display = "none";
+    updateStats([]);
+    return;
+  }
+
   await loadProgress(user);
   await loadCourses();
 });
