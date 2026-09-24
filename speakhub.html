@@ -301,6 +301,7 @@ section{padding:58px 0}
 
 <script type="module">
 import { db, auth } from "./firebase-config.js";
+import { PHASE2_VERIFIED_COURSES } from "./phase2-verified-courses.js";
 import { collection, getDocs, doc, getDoc, query, where } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-auth.js";
 
@@ -470,11 +471,18 @@ async function loadProgress(user){
 async function loadCourses(){
   try{
     const snap = await getDocs(query(collection(db,"courses"),where("status","==","active")));
-    courses = [];
+    const byId = new Map();
+
+    PHASE2_VERIFIED_COURSES.forEach(item => {
+      if(isActiveCourse(item) && canSeeCourse(item)) byId.set(item.id,{...item});
+    });
+
     snap.forEach(d => {
       const item = { id:d.id, ...d.data() };
-      if(isActiveCourse(item) && canSeeCourse(item)) courses.push(item);
+      if(isActiveCourse(item) && canSeeCourse(item)) byId.set(item.id,item);
     });
+
+    courses = Array.from(byId.values());
 
     courses.sort((a,b)=>{
       if(a.featured && !b.featured) return -1;
@@ -488,9 +496,21 @@ async function loadCourses(){
     render();
   }catch(error){
     console.error(error);
-    loading.textContent = "Failed to load courses. Check Firestore rules and collection name.";
-    loading.style.background = "var(--goldSoft)";
-    loading.style.color = "#704800";
+
+    courses = PHASE2_VERIFIED_COURSES
+      .filter(item => isActiveCourse(item) && canSeeCourse(item));
+
+    loading.style.display = "none";
+    updateStats(courses);
+    renderFeatured();
+    render();
+
+    if(!courses.length){
+      loading.style.display = "block";
+      loading.textContent = "The course catalogue is temporarily unavailable.";
+      loading.style.background = "var(--goldSoft)";
+      loading.style.color = "#704800";
+    }
   }
 }
 function dashboardFor(profile){
