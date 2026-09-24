@@ -13,5 +13,29 @@ import { collection,getDocs,query,where } from "https://www.gstatic.com/firebase
 const params=new URLSearchParams(location.search);const result=document.getElementById("result");const codeInput=document.getElementById("codeInput");
 if(params.get("code")){codeInput.value=params.get("code");verifyCode(params.get("code"));}
 verifyForm.addEventListener("submit",e=>{e.preventDefault();verifyCode(codeInput.value.trim());});
-async function verifyCode(code){result.innerHTML="<div class='notice'>Checking...</div>";try{const q=query(collection(db,"certificates"),where("verificationCode","==",code));const snap=await getDocs(q);if(snap.empty){result.innerHTML="<div class='notice bad'>Certificate not found or invalid.</div>";return;}let html="";snap.forEach(d=>{const c=d.data();html+=`<div class="card"><span class="pill valid">Valid Certificate</span><h2>${c.title||"Certificate"}</h2><p><b>Name:</b> ${c.recipientName||"—"}</p><p><b>Issued:</b> ${c.issueDate||"—"}</p><p><b>Certificate No:</b> ${c.certificateNumber||c.verificationCode}</p><p><b>Status:</b> ${c.status||"active"}</p></div>`;});result.innerHTML=html;}catch(e){console.error(e);result.innerHTML="<div class='notice bad'>Verification failed. Check Firestore rules.</div>";}}
+async function verifyCode(code){
+  result.innerHTML="<div class=\"notice\">Checking...</div>";
+  try{
+    const clean=(code||"").trim();
+    let snap=await getDocs(query(collection(db,"certificateVerification"),where("verificationCode","==",clean)));
+    if(snap.empty){
+      snap=await getDocs(query(collection(db,"certificateVerification"),where("certificateNumber","==",clean)));
+    }
+    if(snap.empty){
+      result.innerHTML="<div class=\"notice bad\">Certificate not found or invalid.</div>";
+      return;
+    }
+    let html="";
+    snap.forEach(d=>{
+      const cert=d.data();
+      const status=(cert.status||"active").toLowerCase();
+      const valid=["active","approved","valid"].includes(status);
+      html+=`<div class="card"><span class="pill ${valid?"valid":"pending"}">${valid?"Valid Certificate":"Certificate Status: "+status}</span><h2>${cert.title||"Certificate"}</h2><p><b>Name:</b> ${cert.recipientName||"—"}</p><p><b>Issuer:</b> ${cert.issuer||"SpeakOut Mental Health Outreach"}</p><p><b>Issued:</b> ${cert.issueDate||"—"}</p><p><b>Certificate No:</b> ${cert.certificateNumber||cert.verificationCode||"—"}</p><p><b>Status:</b> ${cert.status||"active"}</p></div>`;
+    });
+    result.innerHTML=html;
+  }catch(e){
+    console.error(e);
+    result.innerHTML="<div class=\"notice bad\">Verification is temporarily unavailable.</div>";
+  }
+}
 </script></body></html>
