@@ -799,16 +799,22 @@ async function loadCourse(){
 
       if(external){
 
+        const credentialType =
+          course.certificateType ||
+          certificate.type ||
+          "provider credential";
+
         certificateBox.innerHTML = `
-          <strong>Certificate Information</strong>
+          <strong>External Credential</strong>
           <br>
-          Certificate issued by
-          <strong>${escapeHtml(issuer)}</strong>.
-          ${
-            certificate.uploadRequired
-            ? "After completing the course, return to SpeakHub Academy and upload your certificate for verification."
-            : ""
-          }
+          <strong>Issuer:</strong>
+          ${escapeHtml(issuer)}
+          <br>
+          <strong>Credential type:</strong>
+          ${escapeHtml(formatLabel(credentialType))}
+          ${course.credentialNote ? `<br><br>${escapeHtml(course.credentialNote)}` : ""}
+          <br><br>
+          <small>This credential is issued by the external provider, not SpeakOut. It does not imply professional licensure, academic credit or accreditation unless the provider explicitly states that separately.</small>
         `;
 
       }else{
