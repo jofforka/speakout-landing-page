@@ -427,6 +427,7 @@ ul{line-height:1.7}
 
 <script type="module">
 import { db, auth } from "./firebase-config.js";
+import { PHASE2_VERIFIED_COURSES } from "./phase2-verified-courses.js";
 
 import {
   doc,
@@ -502,18 +503,29 @@ async function loadCourse(){
       return;
     }
 
-    const snap = await getDoc(doc(db,"courses",id));
+    let course = null;
 
-    if(!snap.exists()){
+    try{
+      const snap = await getDoc(doc(db,"courses",id));
+      if(snap.exists()){
+        course = {
+          id:snap.id,
+          ...snap.data()
+        };
+      }
+    }catch(error){
+      console.warn("Firestore course lookup failed; checking verified catalogue.",error);
+    }
+
+    if(!course){
+      course = PHASE2_VERIFIED_COURSES.find(item => item.id === id) || null;
+    }
+
+    if(!course){
       document.getElementById("loading").textContent =
         "Course not found.";
       return;
     }
-
-    const course = {
-      id:snap.id,
-      ...snap.data()
-    };
 
     heroTitle.textContent =
       course.title || "Course Details";
