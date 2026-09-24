@@ -7,32 +7,166 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function isAdmin() {
+    function hasUserProfile() {
       return signedIn() &&
-        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "admin";
+        exists(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    function currentRole() {
+      return hasUserProfile()
+        ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role
+        : "";
+    }
+
+    function isAdmin() {
+      return hasUserProfile() &&
+        (currentRole() == "admin" || currentRole() == "super_admin");
     }
 
     function isApprovedUser() {
-      return signedIn() &&
-        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+      return hasUserProfile() &&
         (
-          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.approved == true ||
           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.status == "approved" ||
-          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "admin"
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.approved == true ||
+          isAdmin()
         );
     }
 
+    function isAllowedSignupRole(role) {
+      return role in [
+        "student",
+        "parent",
+        "teacher",
+        "school_admin",
+        "ambassador",
+        "contributor"
+      ];
+    }
+
     match /users/{userId} {
-      allow create: if signedIn() && request.auth.uid == userId;
+      allow create: if signedIn() &&
+        request.auth.uid == userId &&
+        request.resource.data.status == "pending" &&
+        isAllowedSignupRole(request.resource.data.role);
 
       allow read: if signedIn() &&
+        (request.auth.uid == userId || isAdmin());
+
+      // Members can update profile-only fields, but cannot promote themselves,
+      // approve their own account, or change school/role ownership fields.
+      allow update: if isAdmin() ||
         (
-          request.auth.uid == userId ||
-          isAdmin()
+          signedIn() &&
+          request.auth.uid == userId &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            "firstName",
+            "lastName",
+            "phone",
+            "country",
+            "state",
+            "city",
+            "occupation",
+            "bio",
+            "photoData",
+            "photoURL",
+            "profileCompleted",
+            "updatedAt"
+          ])
+        ) ||
+        (
+          signedIn() &&
+          request.auth.uid == userId &&
+          resource.data.role == "student" &&
+          !("studentId" in resource.data) &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            "studentId",
+            "updatedAt"
+          ])
         );
 
-      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // Course metadata and protected learning content are available only
+    // after an approved member signs in. Admins manage publishing.
+    match /courses/{courseId} {
+      allow read: if isApprovedUser();
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /courseModules/{moduleId} {
+      allow read: if isApprovedUser();
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /courseLessons/{lessonId} {
+      allow read: if isApprovedUser();
+      allow create, update, delete: if isAdmin();
+    }
+
+    // A learner owns only their own progress records.
+    match /userProgress/{progressId} {
+      allow read: if isAdmin() ||
+        (signedIn() && resource.data.userId == request.auth.uid);
+
+      allow create: if isApprovedUser() &&
+        request.resource.data.userId == request.auth.uid;
+
+      allow update: if isAdmin() ||
+        (
+          isApprovedUser() &&
+          resource.data.userId == request.auth.uid &&
+          request.resource.data.userId == request.auth.uid
+        );
+
+      allow delete: if isAdmin() ||
+        (signedIn() && resource.data.userId == request.auth.uid);
+    }
+
+    // Full certificate records remain private to the recipient and admins.
+    match /certificates/{certificateId} {
+      allow read: if isAdmin() ||
+        (signedIn() && resource.data.recipientId == request.auth.uid);
+      allow create, update, delete: if isAdmin();
+    }
+
+    // Public-safe verification records contain no private learner data beyond
+    // the minimum fields intentionally published for credential validation.
+    match /certificateVerification/{verificationId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /parentStudentLinks/{linkId} {
+      allow read: if isAdmin() ||
+        (
+          signedIn() &&
+          (
+            resource.data.parentId == request.auth.uid ||
+            resource.data.studentId == request.auth.uid
+          )
+        );
+
+      allow create: if isApprovedUser() &&
+        request.resource.data.parentId == request.auth.uid;
+
+      allow update: if isAdmin() ||
+        (
+          isApprovedUser() &&
+          (
+            resource.data.parentId == request.auth.uid ||
+            resource.data.studentId == request.auth.uid
+          )
+        );
+
+      allow delete: if isAdmin() ||
+        (
+          signedIn() &&
+          (
+            resource.data.parentId == request.auth.uid ||
+            resource.data.studentId == request.auth.uid
+          )
+        );
     }
 
     match /kiddiesResources/{docId} {
@@ -40,6 +174,7 @@ service cloud.firestore {
       allow create, update, delete: if isAdmin();
     }
 
+    // Everything not explicitly covered above remains admin-only.
     match /{document=**} {
       allow read, write: if isAdmin();
     }
