@@ -90,17 +90,28 @@ service cloud.firestore {
     // Course metadata and protected learning content are available only
     // after an approved member signs in. Admins manage publishing.
     match /courses/{courseId} {
-      allow read: if isApprovedUser();
+      allow read: if isAdmin() ||
+        (isApprovedUser() && resource.data.status == "active");
       allow create, update, delete: if isAdmin();
     }
 
     match /courseModules/{moduleId} {
-      allow read: if isApprovedUser();
+      allow read: if isAdmin() ||
+        (
+          isApprovedUser() &&
+          exists(/databases/$(database)/documents/courses/$(resource.data.courseId)) &&
+          get(/databases/$(database)/documents/courses/$(resource.data.courseId)).data.status == "active"
+        );
       allow create, update, delete: if isAdmin();
     }
 
     match /courseLessons/{lessonId} {
-      allow read: if isApprovedUser();
+      allow read: if isAdmin() ||
+        (
+          isApprovedUser() &&
+          exists(/databases/$(database)/documents/courses/$(resource.data.courseId)) &&
+          get(/databases/$(database)/documents/courses/$(resource.data.courseId)).data.status == "active"
+        );
       allow create, update, delete: if isAdmin();
     }
 
