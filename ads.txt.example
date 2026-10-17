@@ -1,0 +1,3 @@
+# Example only — DO NOT deploy this file as /ads.txt until the real publisher ID is known.
+# Replace pub-XXXXXXXXXXXXXXXX with the exact AdSense publisher ID shown in the account.
+google.com, pub-XXXXXXXXXXXXXXXX, DIRECT, f08c47fec0942fa0
