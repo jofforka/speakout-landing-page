@@ -1525,6 +1525,35 @@
   </div>
 </section>
 
+<section id="donate" aria-labelledby="donate-title" style="padding:72px 0;background:var(--bg)">
+  <div class="container">
+    <div class="section-title reveal"><span class="label">Support SpeakOut</span><h2 id="donate-title">Choose how to make a difference.</h2><p>Support mental health education, school outreach and access to resources. Give securely online or transfer to any of our official accounts.</p></div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,250px),1fr));gap:20px">
+      <article class="reveal" style="background:white;border:1px solid var(--line);border-radius:22px;padding:26px;box-shadow:var(--shadow-soft)"><h3>Zenith Bank</h3><p>Speakout Mental Health Outreach</p><p style="font-size:1.45rem;font-weight:800;letter-spacing:.04em">1229664088</p><button type="button" class="btn btn-primary" data-copy-account="1229664088" aria-label="Copy Zenith Bank account number">Copy account number</button></article>
+      <article class="reveal" style="background:white;border:1px solid var(--line);border-radius:22px;padding:26px;box-shadow:var(--shadow-soft)"><h3>Fidelity Bank</h3><p>Speakout Mental Health Outreach</p><p style="font-size:1.45rem;font-weight:800;letter-spacing:.04em">4110173961</p><button type="button" class="btn btn-primary" data-copy-account="4110173961" aria-label="Copy Fidelity Bank account number">Copy account number</button></article>
+      <article class="reveal" style="background:white;border:1px solid var(--line);border-radius:22px;padding:26px;box-shadow:var(--shadow-soft)"><h3>OPay</h3><p>Speakout Mental Health Outreach</p><p style="font-size:1.45rem;font-weight:800;letter-spacing:.04em">8118103510</p><button type="button" class="btn btn-primary" data-copy-account="8118103510" aria-label="Copy OPay account number">Copy account number</button></article>
+    </div>
+    <div style="margin-top:26px;display:flex;flex-wrap:wrap;gap:12px;align-items:center"><a class="btn btn-gold" href="https://paystack.shop/pay/speakout-donate" target="_blank" rel="noopener noreferrer">Donate securely with Paystack</a><a class="btn btn-soft" href="https://speakoutmentalhealth.org/pages/donate.html">Explore donation options</a></div>
+    <p style="margin-top:18px;color:var(--muted)">Before transferring, confirm the account name shown in your banking app. For receipts or transfer enquiries, contact <a href="mailto:speaaakout@gmail.com">speaaakout@gmail.com</a>. Transfers are not automatically verified on this page.</p>
+    <p id="donation-copy-status" role="status" aria-live="polite" style="color:var(--green)"></p>
+  </div>
+</section>
+<script>
+document.addEventListener('click', async function(event) {
+  const button = event.target.closest('[data-copy-account]');
+  if (!button) return;
+  const number = button.getAttribute('data-copy-account');
+  const status = document.getElementById('donation-copy-status');
+  try {
+    if (!navigator.clipboard || !window.isSecureContext) throw new Error('Clipboard unavailable');
+    await navigator.clipboard.writeText(number);
+    status.textContent = 'Account number copied.';
+  } catch (error) {
+    status.textContent = 'Please select and copy the displayed account number manually.';
+  }
+});
+</script>
+
 <section class="final-cta">
       <div class="container reveal">
         <span class="kicker">Fund the mission</span>
@@ -1532,7 +1561,7 @@
         <p>Join schools, organizations, professionals and volunteers building healthier communities through awareness, technology and practical support systems.</p>
 
         <div class="cta-actions">
-          <a href="https://paystack.shop/pay/speakout-donate" target="_blank" class="btn btn-light" rel="noopener">Donate / Sponsor</a>
+          <a href="#donate" class="btn btn-light" rel="noopener">Donate / Sponsor</a>
           <a href="https://drive.google.com/drive/folders/1MleVn15GU05lNebKfT2rSAAJcfhGK332?usp=drive_link" target="_blank" class="btn btn-outline" rel="noopener">View Partnership Deck</a>
           <a href="https://wa.me/2348118103510" target="_blank" class="btn btn-outline" rel="noopener">WhatsApp Us</a>
         </div>
@@ -1580,7 +1609,7 @@
           <a href="login.html">Portal Login</a>
           <a href="register.html">Apply for Portal Access</a>
           <a href="https://mindcheck.speakoutmentalhealth.org/ambassador.html" target="_blank" rel="noopener">Ambassador Program</a>
-          <a href="https://paystack.shop/pay/speakout-donate" target="_blank" rel="noopener">Donate / Sponsor</a>
+          <a href="#donate">Donate / Sponsor</a>
         </div>
 
         <div>
